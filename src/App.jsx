@@ -6,36 +6,33 @@ function App() {
   const [scanning, setScanning] = useState(false);
   const scannerRef = useRef(null);
 
-  const startScan = async () => {
+  const startScanner = async () => {
     setScanning(true);
-
     const scanner = new Html5Qrcode("reader");
     scannerRef.current = scanner;
 
-    const devices = await Html5Qrcode.getCameras();
-    if (devices && devices.length) {
-      const cameraId = devices[0].id;
-      scanner.start(
-        cameraId,
+    scanner
+      .start(
+        { facingMode: "environment" }, // 📷 Orqa kamera
         {
           fps: 10,
-          qrbox: {
-            width: 250,
-            height: 250,
-          }, // bu ramka joyi
+          qrbox: { width: 250, height: 250 }, // 📦 Ramka o'lchami
         },
         (decodedText) => {
-          setCode(decodedText);
-          stopScan();
+          setCode(decodedText); // ✅ to‘g‘ri funksiya
+          stopScanner(); // ✅ to‘g‘ri funksiya nomi
         },
         (errorMessage) => {
-          // xatolarni ko‘rsatmaymiz
+          // 👻 Xatoliklarni ko‘rsatmaslik
         }
-      );
-    }
+      )
+      .catch((err) => {
+        console.error("Skannerni ishga tushirishda xatolik:", err);
+        setScanning(false);
+      });
   };
 
-  const stopScan = () => {
+  const stopScanner = () => {
     if (scannerRef.current) {
       scannerRef.current.stop().then(() => {
         scannerRef.current.clear();
@@ -50,7 +47,7 @@ function App() {
 
       {!scanning && (
         <button
-          onClick={startScan}
+          onClick={startScanner}
           style={{
             padding: "10px 20px",
             fontSize: "16px",
@@ -66,11 +63,20 @@ function App() {
         </button>
       )}
 
-      <div id="reader" style={{ width: "300px", margin: "20px auto" }}></div>
+      <div
+        id="reader"
+        style={{
+          width: "300px",
+          height: "300px",
+          margin: "20px auto",
+          border: scanning ? "2px dashed #3b82f6" : "none",
+          borderRadius: "8px",
+        }}
+      ></div>
 
       {scanning && (
         <button
-          onClick={stopScan}
+          onClick={stopScanner}
           style={{
             padding: "8px 16px",
             backgroundColor: "#ef4444",
@@ -89,7 +95,6 @@ function App() {
         <strong>QR kod matni:</strong><br />
         {code}
       </p>
-      
     </div>
   );
 }
