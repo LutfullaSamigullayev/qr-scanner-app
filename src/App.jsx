@@ -1,86 +1,97 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
-export default function QRScannerApp() {
-  const [scannedCode, setScannedCode] = useState(null);
-  const [mode, setMode] = useState(null); // "save" yoki "find"
+function App() {
+  const [code, setCode] = useState("QR kod hali skaner qilinmadi");
+  const [scanning, setScanning] = useState(false);
+  const scannerRef = useRef(null);
 
-  // Kamerani ishga tushurish funksiyasi
-  const startScanner = async () => {
-    const html5QrCode = new Html5Qrcode("reader");
-    try {
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        async (decodedText) => {
-          html5QrCode.stop(); // Skan qilingandan keyin kamerani to'xtatamiz
-          setScannedCode(decodedText);
+  const startScan = async () => {
+    setScanning(true);
 
-          if (mode === "save") {
-            // Foydalanuvchidan nom so'raymiz
-            const name = prompt("Bu QR-kodga qanday nom beramiz?");
-            if (name) {
-              // Mokky.dev API'ga yuborish
-              await fetch("https://api.mokky.dev/api/qr-codes", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "x-api-key": import.meta.env.VITE_MOKKY_API_KEY,
-                },
-                body: JSON.stringify({ name, code: decodedText }),
-              });
-              alert("Muvaffaqiyatli saqlandi!");
-            }
-          } else if (mode === "find") {
-            // Mokky.dev dan qidirish
-            const response = await fetch(
-              `https://api.mokky.dev/api/qr-codes?code=${decodedText}`,
-              {
-                headers: {
-                  "x-api-key": import.meta.env.VITE_MOKKY_API_KEY,
-                },
-              }
-            );
-            const data = await response.json();
-            const found = data.items?.[0];
-            alert(`Topildi: ${found?.name || "Hech nima topilmadi"}`);
-          }
+    const scanner = new Html5Qrcode("reader");
+    scannerRef.current = scanner;
+
+    const devices = await Html5Qrcode.getCameras();
+    if (devices && devices.length) {
+      const cameraId = devices[0].id;
+      scanner.start(
+        cameraId,
+        {
+          fps: 10,
+          qrbox: {
+            width: 250,
+            height: 250,
+          }, // bu ramka joyi
+        },
+        (decodedText) => {
+          setCode(decodedText);
+          stopScan();
         },
         (errorMessage) => {
-          console.warn("Skan xatoligi:", errorMessage);
+          // xatolarni ko‘rsatmaymiz
         }
       );
-    } catch (error) {
-      console.error("Kamera ishga tushmadi:", error);
+    }
+  };
+
+  const stopScan = () => {
+    if (scannerRef.current) {
+      scannerRef.current.stop().then(() => {
+        scannerRef.current.clear();
+        setScanning(false);
+      });
     }
   };
 
   return (
-    <div className="p-4 space-y-4">
-      {/* QR scanner joyi */}
-      <div id="reader" className="w-full h-60 border rounded" />
+    <div style={{ padding: "20px", textAlign: "center" }}>
+      <h1>📷 QR Kod Skanner</h1>
 
-      {/* Tugmalar */}
-      <div className="flex gap-4">
+      {!scanning && (
         <button
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-          onClick={() => {
-            setMode("save");
-            startScanner();
+          onClick={startScan}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            marginTop: "20px",
+            backgroundColor: "#3b82f6",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
           }}
         >
-          QR saqlash
+          📤 Skannerni boshlash
         </button>
+      )}
+
+      <div id="reader" style={{ width: "300px", margin: "20px auto" }}></div>
+
+      {scanning && (
         <button
-          className="bg-green-500 text-white px-4 py-2 rounded"
-          onClick={() => {
-            setMode("find");
-            startScanner();
+          onClick={stopScan}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#ef4444",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            marginBottom: "10px",
           }}
         >
-          QR qidirish
+          ✖ Skannerni to‘xtatish
         </button>
-      </div>
+      )}
+
+      <p style={{ fontSize: "18px", marginTop: "20px", wordWrap: "break-word" }}>
+        <strong>QR kod matni:</strong><br />
+        {code}
+      </p>
+      
     </div>
   );
 }
+
+export default App;
