@@ -8,7 +8,7 @@ function App() {
   const [scanning, setScanning] = useState(false);
   const [currentMachine, setCurrentMachine] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [status, setStatus] = useState(null); // 'success', 'cancel', null
+  const [status, setStatus] = useState(null);
   const scannerRef = useRef(null);
 
   const apiBase = "https://0e84bcd063294f11.mokky.dev";
@@ -21,7 +21,7 @@ function App() {
 
     fetch(`${apiBase}/filial`)
       .then((res) => res.json())
-      .then(setLocations)
+      .then((data) => setLocations(data))
       .catch(console.error);
   }, []);
 
@@ -110,17 +110,20 @@ function App() {
 
   return (
     <div style={{ padding: 20, textAlign: "center" }}>
-      <h1>📋 Inventarizatsiya</h1>
+      <h1>\uD83D\uDCCB Inventarizatsiya</h1>
 
-      {/* Lokatsiya tanlash */}
       <select
         value={selectedLocation}
-        onChange={(e) => setSelectedLocation(e.target.value)}
+        onChange={(e) => {
+          setSelectedLocation(e.target.value);
+          setCurrentMachine(null);
+          setStatus(null);
+        }}
         style={{ padding: "10px", marginBottom: "20px" }}
       >
         <option value="">Lokatsiyani tanlang</option>
         {locations.map((loc) => (
-          <option key={loc.id} value={loc.name}>
+          <option key={loc.id} value={loc.name.toLowerCase()}>
             {loc.name}
           </option>
         ))}
@@ -133,11 +136,8 @@ function App() {
       </div>
 
       {!scanning && selectedLocation && (
-        <button
-          onClick={startScanner}
-          style={btnStyle("#3b82f6")}
-        >
-          📷 Skanerlashni boshlash
+        <button onClick={startScanner} style={btnStyle("#3b82f6")}>
+          \uD83D\uDCF7 Skanerlashni boshlash
         </button>
       )}
 
@@ -151,7 +151,6 @@ function App() {
         ♻ Reset
       </button>
 
-      {/* Scanner oynasi */}
       <div
         id="reader"
         style={{
@@ -163,10 +162,9 @@ function App() {
         }}
       />
 
-      {/* Mashina ma'lumoti */}
       {currentMachine && (
         <div style={{ marginTop: 20, border: "1px solid #ccc", borderRadius: 10, padding: 15 }}>
-          <h3>🔍 Topilgan mashina:</h3>
+          <h3>\uD83D\uDD0D Topilgan mashina:</h3>
           <p><strong>Kategoriya:</strong> {currentMachine.category}</p>
           <p><strong>Kompaniya:</strong> {currentMachine.company}</p>
           <p><strong>Model:</strong> {currentMachine.model}</p>
@@ -177,7 +175,6 @@ function App() {
         </div>
       )}
 
-      {/* Modal */}
       {showModal && (
         <div style={modalStyle}>
           <div style={modalContentStyle}>
