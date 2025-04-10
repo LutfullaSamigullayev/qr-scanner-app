@@ -1,57 +1,59 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-
-const API_URL = "https://0e84bcd063294f11.mokky.dev/sewing-machines";
 
 function App() {
   const [machines, setMachines] = useState([]);
-  const [scannedCount, setScannedCount] = useState(0);
+  const [locations, setLocations] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [currentMachine, setCurrentMachine] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [status, setStatus] = useState(null); // 'success', 'cancel', null
   const scannerRef = useRef(null);
 
+  const apiBase = "https://0e84bcd063294f11.mokky.dev";
+
   useEffect(() => {
-    fetchMachines();
+    fetch(`${apiBase}/sewing-machines`)
+      .then((res) => res.json())
+      .then(setMachines)
+      .catch(console.error);
+
+    fetch(`${apiBase}/filial`)
+      .then((res) => res.json())
+      .then(setLocations)
+      .catch(console.error);
   }, []);
 
-  const fetchMachines = async () => {
-    const res = await fetch(API_URL);
-    const data = await res.json();
-    setMachines(data);
-    setScannedCount(data.filter((m) => m.checked).length);
-  };
-
-  const startScanner = async () => {
+  const startScanner = () => {
     if (scanning) return;
     setScanning(true);
-
     const scanner = new Html5Qrcode("reader");
     scannerRef.current = scanner;
 
     scanner
       .start(
         { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
-          const match = machines.find(
-            (machine) => machine.serialNumber === decodedText
+          const machine = machines.find(
+            (m) => m.serialNumber === decodedText && m.location === selectedLocation
           );
 
-          if (match && !match.checked) {
-            await fetch(`${API_URL}/${match.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ checked: true }),
-            });
-            fetchMachines();
+          if (machine) {
+            setCurrentMachine(machine);
+            if (machine.checked) {
+              setStatus("success");
+              stopScanner();
+            } else {
+              setShowModal(true);
+              stopScanner();
+            }
           }
-        },
-        (errorMessage) => {}
+        }
       )
       .catch((err) => {
-        console.error("Scanner error:", err);
+        console.error("Scanner xatosi:", err);
         setScanning(false);
       });
   };
@@ -65,81 +67,158 @@ function App() {
     }
   };
 
-  const resetInventory = async () => {
-    for (const machine of machines) {
-      if (machine.checked) {
-        await fetch(`${API_URL}/${machine.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ checked: false }),
-        });
-      }
+  const handleConfirm = async () => {
+    if (currentMachine) {
+      await fetch(`${apiBase}/sewing-machines/${currentMachine.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checked: true }),
+      });
+
+      setMachines((prev) =>
+        prev.map((m) =>
+          m.id === currentMachine.id ? { ...m, checked: true } : m
+        )
+      );
+      setStatus("success");
+      setShowModal(false);
     }
-    fetchMachines();
   };
+
+  const handleCancel = () => {
+    setStatus("cancel");
+    setShowModal(false);
+  };
+
+  const handleReset = async () => {
+    const resetRequests = machines.map((m) =>
+      fetch(`${apiBase}/sewing-machines/${m.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checked: false }),
+      })
+    );
+
+    await Promise.all(resetRequests);
+    setMachines((prev) => prev.map((m) => ({ ...m, checked: false })));
+    setCurrentMachine(null);
+    setStatus(null);
+  };
+
+  const scannedCount = machines.filter((m) => m.checked && m.location === selectedLocation).length;
+  const totalCount = machines.filter((m) => m.location === selectedLocation).length;
 
   return (
     <div style={{ padding: 20, textAlign: "center" }}>
-      <h1>📦 Inventarizatsiya QR Skanner</h1>
+      <h1>📋 Inventarizatsiya</h1>
 
-      <div style={{ margin: "20px 0" }}>
-        <button
-          onClick={startScanner}
-          disabled={scanning}
-          style={{
-            padding: "10px 20px",
-            fontSize: 16,
-            marginRight: 10,
-            backgroundColor: "#3b82f6",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          ▶️ Skannerni boshlash
-        </button>
+      {/* Lokatsiya tanlash */}
+      <select
+        value={selectedLocation}
+        onChange={(e) => setSelectedLocation(e.target.value)}
+        style={{ padding: "10px", marginBottom: "20px" }}
+      >
+        <option value="">Lokatsiyani tanlang</option>
+        {locations.map((loc) => (
+          <option key={loc.id} value={loc.name}>
+            {loc.name}
+          </option>
+        ))}
+      </select>
 
-        <button
-          onClick={stopScanner}
-          disabled={!scanning}
-          style={{
-            padding: "10px 20px",
-            fontSize: 16,
-            marginRight: 10,
-            backgroundColor: "#ef4444",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          ⏹ To‘xtatish
-        </button>
-
-        <button
-          onClick={resetInventory}
-          style={{
-            padding: "10px 20px",
-            fontSize: 16,
-            backgroundColor: "#f59e0b",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          🔄 Reset
-        </button>
+      <div style={{ marginBottom: 10 }}>
+        <strong>
+          Belgilangan: {scannedCount}/{totalCount}
+        </strong>
       </div>
 
-      <div id="reader" style={{ width: 300, margin: "0 auto" }}></div>
+      {!scanning && selectedLocation && (
+        <button
+          onClick={startScanner}
+          style={btnStyle("#3b82f6")}
+        >
+          📷 Skanerlashni boshlash
+        </button>
+      )}
 
-      <p style={{ marginTop: 30, fontSize: 18 }}>
-        ✅ Belgilangan: {scannedCount} / {machines.length}
-      </p>
+      {scanning && (
+        <button onClick={stopScanner} style={btnStyle("#ef4444")}>
+          ⛔ Skanerni to‘xtatish
+        </button>
+      )}
+
+      <button onClick={handleReset} style={btnStyle("#f59e0b")}>
+        ♻ Reset
+      </button>
+
+      {/* Scanner oynasi */}
+      <div
+        id="reader"
+        style={{
+          width: "300px",
+          margin: "20px auto",
+          border: "2px dashed #ccc",
+          padding: "10px",
+          borderRadius: "12px",
+        }}
+      />
+
+      {/* Mashina ma'lumoti */}
+      {currentMachine && (
+        <div style={{ marginTop: 20, border: "1px solid #ccc", borderRadius: 10, padding: 15 }}>
+          <h3>🔍 Topilgan mashina:</h3>
+          <p><strong>Kategoriya:</strong> {currentMachine.category}</p>
+          <p><strong>Kompaniya:</strong> {currentMachine.company}</p>
+          <p><strong>Model:</strong> {currentMachine.model}</p>
+          <p><strong>Inv. raqami:</strong> {currentMachine.inventoryNumber}</p>
+          <p><strong>Seriya raqami:</strong> {currentMachine.serialNumber}</p>
+          {status === "success" && <p style={{ color: "green" }}>✅ Belgilangan</p>}
+          {status === "cancel" && <p style={{ color: "red" }}>❌ Belgilanmadi</p>}
+        </div>
+      )}
+
+      {/* Modal */}
+      {showModal && (
+        <div style={modalStyle}>
+          <div style={modalContentStyle}>
+            <p>Bu mashina hali belgilanmagan. Belgilansinmi?</p>
+            <button onClick={handleConfirm} style={btnStyle("green")}>Ha</button>
+            <button onClick={handleCancel} style={btnStyle("gray")}>Yo‘q</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const btnStyle = (bg) => ({
+  padding: "10px 20px",
+  backgroundColor: bg,
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  cursor: "pointer",
+  margin: "5px",
+  fontSize: "16px",
+});
+
+const modalStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "100%",
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const modalContentStyle = {
+  backgroundColor: "white",
+  padding: 20,
+  borderRadius: 10,
+  textAlign: "center",
+};
 
 export default App;
